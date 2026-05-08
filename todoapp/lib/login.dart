@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'main.dart';
+import 'register.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,15 +20,12 @@ class _LoginPageState extends State<LoginPage> {
   static const Color darkBlue = Color(0xFF1565C0);
 
   void login() {
-    if (emailController.text.isNotEmpty &&
-        passwordController.text.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
-      );
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const HomeScreen(),
+      ),
+    );
   }
 
   @override
@@ -158,6 +156,37 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Don't have an account? ",
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const RegisterPage(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            "Register",
+                            style: TextStyle(
+                              color: dodgerBlue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
