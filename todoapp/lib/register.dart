@@ -30,19 +30,12 @@ class _RegisterPageState extends State<RegisterPage> {
   static const Color darkBlue = Color(0xFF1565C0);
 
   void register() {
-    if (usernameController.text.isNotEmpty &&
-        emailController.text.isNotEmpty &&
-        passwordController.text.isNotEmpty &&
-        confirmPasswordController.text.isNotEmpty &&
-        passwordController.text ==
-            confirmPasswordController.text) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
-      );
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LoginPage(),
+      ),
+    );
   }
 
   @override
