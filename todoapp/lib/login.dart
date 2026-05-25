@@ -10,21 +10,27 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController _emailCtrl    = TextEditingController();
+  final TextEditingController _passwordCtrl = TextEditingController();
 
-  bool isPasswordHidden = true;
+  bool _isPasswordHidden = true;
 
-  static const Color dodgerBlue = Color(0xFF1E90FF);
-  static const Color lightBlue = Color(0xFFE8F4FF);
-  static const Color darkBlue = Color(0xFF1565C0);
+  static const Color kDodgerBlue = Color(0xFF1E90FF);
+  static const Color kLightBlue  = Color(0xFFE8F4FF);
+  static const Color kDarkBlue   = Color(0xFF1565C0);
 
-  void login() {
-    Navigator.push(
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  void _login() {
+    Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(
-        builder: (context) => const HomeScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (_) => false,
     );
   }
 
@@ -35,12 +41,13 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: Column(
           children: [
+            // ── Header ──────────────────────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 50),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [darkBlue, dodgerBlue],
+                  colors: [kDarkBlue, kDodgerBlue],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -49,16 +56,12 @@ class _LoginPageState extends State<LoginPage> {
                   bottomRight: Radius.circular(32),
                 ),
               ),
-              child: Column(
-                children: const [
-                  Icon(
-                    Icons.lock_outline,
-                    color: Colors.white,
-                    size: 70,
-                  ),
+              child: const Column(
+                children: [
+                  Icon(Icons.lock_outline, color: Colors.white, size: 70),
                   SizedBox(height: 16),
                   Text(
-                    "Welcome Back",
+                    'Welcome Back',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
@@ -67,87 +70,72 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "Login to continue",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 15,
-                    ),
+                    'Login untuk melanjutkan',
+                    style: TextStyle(color: Colors.white70, fontSize: 15),
                   ),
                 ],
               ),
             ),
 
+            // ── Form ────────────────────────────────────────────────────────
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
+                    // Email
                     TextField(
-                      controller: emailController,
-                      decoration: InputDecoration(
-                        hintText: "Email",
-                        prefixIcon: const Icon(
-                          Icons.email_outlined,
-                          color: dodgerBlue,
-                        ),
-                        filled: true,
-                        fillColor: lightBlue,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _inputDeco('Email', Icons.email_outlined),
                     ),
 
                     const SizedBox(height: 18),
 
+                    // Password
                     TextField(
-                      controller: passwordController,
-                      obscureText: isPasswordHidden,
-                      decoration: InputDecoration(
-                        hintText: "Password",
-                        prefixIcon: const Icon(
-                          Icons.lock_outline,
-                          color: dodgerBlue,
-                        ),
-                        suffixIcon: IconButton(
+                      controller: _passwordCtrl,
+                      obscureText: _isPasswordHidden,
+                      decoration: _inputDeco(
+                        'Password',
+                        Icons.lock_outline,
+                        suffix: IconButton(
                           icon: Icon(
-                            isPasswordHidden
+                            _isPasswordHidden
                                 ? Icons.visibility_off
                                 : Icons.visibility,
-                            color: dodgerBlue,
+                            color: kDodgerBlue,
                           ),
-                          onPressed: () {
-                            setState(() {
-                              isPasswordHidden = !isPasswordHidden;
-                            });
-                          },
-                        ),
-                        filled: true,
-                        fillColor: lightBlue,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
+                          onPressed: () => setState(
+                              () => _isPasswordHidden = !_isPasswordHidden),
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 30),
 
+                    // Tombol Login
                     GestureDetector(
-                      onTap: login,
+                      onTap: _login,
                       child: Container(
                         width: double.infinity,
                         height: 56,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [darkBlue, dodgerBlue],
+                            colors: [kDarkBlue, kDodgerBlue],
                           ),
                           borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kDodgerBlue.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: const Center(
                           child: Text(
-                            "LOGIN",
+                            'LOGIN',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -160,28 +148,24 @@ class _LoginPageState extends State<LoginPage> {
 
                     const SizedBox(height: 24),
 
+                    // Navigasi ke Register
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Don't have an account? ",
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                          ),
+                          'Belum punya akun? ',
+                          style: TextStyle(color: Colors.grey.shade600),
                         ),
                         GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const RegisterPage(),
-                              ),
-                            );
-                          },
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const RegisterPage()),
+                          ),
                           child: const Text(
-                            "Register",
+                            'Daftar',
                             style: TextStyle(
-                              color: dodgerBlue,
+                              color: kDodgerBlue,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -197,4 +181,21 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+
+  InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix}) =>
+      InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: kDodgerBlue),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: kLightBlue,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: kDodgerBlue, width: 1.5),
+        ),
+      );
 }
