@@ -1,10 +1,29 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+//  main.dart
+//  Menampung: MyApp, HomeScreen
+//  Mengimpor: task.dart, schedule.dart, login.dart
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'login.dart';
-import 'login.dart';
+import 'task.dart';
+import 'schedule.dart';
 
 void main() {
-  runApp(MyApp());
+  // ── Untuk mengaktifkan Firebase, tambahkan baris berikut: ──────────────────
+  //   WidgetsFlutterBinding.ensureInitialized();
+  //   await Firebase.initializeApp(
+  //     options: DefaultFirebaseOptions.currentPlatform,
+  //   );
+  //   Kemudian ubah main() menjadi async.
+  // ───────────────────────────────────────────────────────────────────────────
+  runApp(const MyApp());
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  APP ROOT
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -12,12 +31,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: LoginPage(),
+      home: const LoginPage(),
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF1E90FF),
+        primaryColor: kDodgerBlue,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1E90FF),
+          seedColor: kDodgerBlue,
           brightness: Brightness.light,
         ),
         fontFamily: 'Roboto',
@@ -25,6 +44,10 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  HOME / DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,395 +57,455 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<String> todoList = [];
-  final TextEditingController _controller = TextEditingController();
-  int updateIndex = -1;
+  // ── State lokal (ganti dengan stream Firestore setelah integrasi DB) ────────
+  final List<TaskModel>     _tasks     = [];
+  final List<ScheduleModel> _schedules = [];
 
-  static const Color dodgerBlue = Color(0xFF1E90FF);
-  static const Color lightBlue = Color(0xFFE8F4FF);
-  static const Color darkBlue = Color(0xFF1565C0);
+  // ── Timer untuk deteksi overdue otomatis ────────────────────────────────────
+  // Setiap menit, setState dipanggil agar isOverdue() dievaluasi ulang.
+  // Dengan begitu, task yang tepat mencapai jatuh temponya akan langsung
+  // menampilkan silang merah tanpa perlu interaksi dari user.
+  late final Timer _overdueTimer;
 
-  void logout() async {
+  @override
+  void initState() {
+    super.initState();
+    _overdueTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) { if (mounted) setState(() {}); },
+    );
+  }
+
+  @override
+  void dispose() {
+    _overdueTimer.cancel();
+    super.dispose();
+  }
+
+  // ── Logout ──────────────────────────────────────────────────────────────────
+
+  Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.logout, color: Color(0xFF1E90FF)),
+            Icon(Icons.logout, color: kDodgerBlue),
             SizedBox(width: 10),
-            Text("Logout"),
+            Text('Logout'),
           ],
         ),
-        content: const Text("Apakah Anda yakin ingin logout?"),
+        content: const Text('Apakah Anda yakin ingin logout?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E90FF),
+              backgroundColor: kDodgerBlue,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  borderRadius: BorderRadius.circular(10)),
             ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Logout", style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
+      // ── Untuk Firebase Auth: await FirebaseAuth.instance.signOut(); ─────────
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
-        (route) => false,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (_) => false,
       );
     }
   }
 
-  void addList(String task) {
-    if (task.trim().isEmpty) return;
-    setState(() {
-      todoList.add(task.trim());
-      _controller.clear();
-    });
+  // ── CRUD Task ───────────────────────────────────────────────────────────────
+
+  void _toggleTask(TaskModel task) {
+    // ── Untuk Firestore: ────────────────────────────────────────────────────
+    //   FirebaseFirestore.instance
+    //       .collection('users').doc(task.userId)
+    //       .collection('tasks').doc(task.id)
+    //       .update({'isDone': !task.isDone});
+    final idx = _tasks.indexOf(task);
+    if (idx == -1) return;
+    setState(() => _tasks[idx] = task.copyWith(isDone: !task.isDone));
   }
 
-  void updateListItem(String task, int index) {
-    if (task.trim().isEmpty) return;
-    setState(() {
-      todoList[index] = task.trim();
-      updateIndex = -1;
-      _controller.clear();
-    });
+  void _deleteTask(TaskModel task) {
+    // ── Untuk Firestore: ────────────────────────────────────────────────────
+    //   FirebaseFirestore.instance
+    //       .collection('users').doc(task.userId)
+    //       .collection('tasks').doc(task.id)
+    //       .delete();
+    setState(() => _tasks.remove(task));
   }
 
-  void deleteItem(int index) {
-    setState(() {
-      todoList.removeAt(index);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F7FF),
-      appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1565C0), Color(0xFF1E90FF)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.check_circle_outline, color: Colors.white, size: 28),
-            SizedBox(width: 10),
-            Text(
-              "MyTasks",
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-                color: Colors.white,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-        centerTitle: true,
-        elevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  "${todoList.length} tasks",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: logout,
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: "Logout",
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Top decorative wave container
-          Container(
-            height: 16,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1565C0), Color(0xFF1E90FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Task list
-          Expanded(
-            child: todoList.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.inbox_outlined,
-                            size: 72, color: dodgerBlue.withOpacity(0.3)),
-                        const SizedBox(height: 12),
-                        Text(
-                          "No tasks yet!",
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: dodgerBlue.withOpacity(0.5),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Add something below to get started.",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.withOpacity(0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: todoList.length,
-                    itemBuilder: (context, index) {
-                      final isEditing = updateIndex == index;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: isEditing ? lightBlue : Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isEditing
-                                ? dodgerBlue
-                                : Colors.blue.withOpacity(0.15),
-                            width: isEditing ? 1.5 : 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: dodgerBlue.withOpacity(0.07),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 6),
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: lightBlue,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                "${index + 1}",
-                                style: const TextStyle(
-                                  color: dodgerBlue,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            todoList[index],
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _ActionButton(
-                                icon: Icons.edit_outlined,
-                                color: dodgerBlue,
-                                bgColor: lightBlue,
-                                onTap: () {
-                                  setState(() {
-                                    _controller.text = todoList[index];
-                                    updateIndex = index;
-                                  });
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _ActionButton(
-                                icon: Icons.delete_outline,
-                                color: const Color(0xFFE53935),
-                                bgColor: const Color(0xFFFFEBEE),
-                                onTap: () => deleteItem(index),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-
-          // Input area
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: dodgerBlue.withOpacity(0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: updateIndex != -1
-                          ? 'Edit task...'
-                          : 'Add a new task...',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 15,
-                      ),
-                      prefixIcon: Icon(
-                        updateIndex != -1
-                            ? Icons.edit_outlined
-                            : Icons.add_task,
-                        color: dodgerBlue,
-                        size: 20,
-                      ),
-                      filled: true,
-                      fillColor: lightBlue,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide:
-                            const BorderSide(color: dodgerBlue, width: 1.5),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14, horizontal: 16),
-                    ),
-                    onSubmitted: (val) => updateIndex != -1
-                        ? updateListItem(val, updateIndex)
-                        : addList(val),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => updateIndex != -1
-                      ? updateListItem(_controller.text, updateIndex)
-                      : addList(_controller.text),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1565C0), Color(0xFF1E90FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: dodgerBlue.withOpacity(0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      updateIndex != -1 ? Icons.check_rounded : Icons.add_rounded,
-                      color: Colors.white,
-                      size: 26,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+  void _openTaskSheet({TaskModel? existing}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => TaskBottomSheet(
+        existing: existing,
+        onSave: (task) {
+          // ── Untuk Firestore: ──────────────────────────────────────────────
+          //   final ref = FirebaseFirestore.instance
+          //       .collection('users').doc(task.userId)
+          //       .collection('tasks');
+          //   if (task.id.isEmpty) {
+          //     ref.add(task.toMap());
+          //   } else {
+          //     ref.doc(task.id).set(task.toMap());
+          //   }
+          setState(() {
+            if (existing != null) {
+              final idx = _tasks.indexOf(existing);
+              if (idx != -1) _tasks[idx] = task;
+            } else {
+              _tasks.add(task);
+            }
+          });
+        },
       ),
     );
   }
-}
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final Color bgColor;
-  final VoidCallback onTap;
+  // ── CRUD Schedule ───────────────────────────────────────────────────────────
 
-  const _ActionButton({
-    required this.icon,
-    required this.color,
-    required this.bgColor,
-    required this.onTap,
-  });
+  void _deleteSchedule(ScheduleModel s) {
+    // ── Untuk Firestore: ────────────────────────────────────────────────────
+    //   FirebaseFirestore.instance
+    //       .collection('users').doc(s.userId)
+    //       .collection('schedules').doc(s.id)
+    //       .delete();
+    setState(() => _schedules.remove(s));
+  }
+
+  void _openScheduleSheet({ScheduleModel? existing}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ScheduleBottomSheet(
+        existing: existing,
+        onSave: (s) {
+          // ── Untuk Firestore: ──────────────────────────────────────────────
+          //   final ref = FirebaseFirestore.instance
+          //       .collection('users').doc(s.userId)
+          //       .collection('schedules');
+          //   if (s.id.isEmpty) {
+          //     ref.add(s.toMap());
+          //   } else {
+          //     ref.doc(s.id).set(s.toMap());
+          //   }
+          setState(() {
+            if (existing != null) {
+              final idx = _schedules.indexOf(existing);
+              if (idx != -1) _schedules[idx] = s;
+            } else {
+              _schedules.add(s);
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  // ── FAB: pilih tipe item baru ────────────────────────────────────────────────
+
+  void _showAddOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              'Tambah Apa?',
+              style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                // Task
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _openTaskSheet();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      decoration: BoxDecoration(
+                        color: kLightBlue,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: kDodgerBlue.withOpacity(0.3)),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.task_alt_outlined,
+                              color: kDodgerBlue, size: 32),
+                          SizedBox(height: 8),
+                          Text(
+                            'Task',
+                            style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600,
+                              color: kDodgerBlue,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Satu kali, ada jatuh tempo',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Jadwal
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _openScheduleSheet();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      decoration: BoxDecoration(
+                        color: kLightBlue,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: kDodgerBlue.withOpacity(0.3)),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.calendar_month_outlined,
+                              color: kDodgerBlue, size: 32),
+                          SizedBox(height: 8),
+                          Text(
+                            'Jadwal',
+                            style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600,
+                              color: kDodgerBlue,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Berulang, pilih hari & jam',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BUILD ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(9),
+    final total = _tasks.length + _schedules.length;
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF0F7FF),
+
+        // ── AppBar ──────────────────────────────────────────────────────────
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [kDarkBlue, kDodgerBlue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.check_circle_outline,
+                  color: Colors.white, size: 26),
+              SizedBox(width: 8),
+              Text(
+                'MyTasks',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 22,
+                  color: Colors.white, letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          centerTitle: true,
+          elevation: 0,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$total item',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout, color: Colors.white),
+              tooltip: 'Logout',
+            ),
+          ],
         ),
-        child: Icon(icon, color: color, size: 18),
+
+        // ── Body ────────────────────────────────────────────────────────────
+        body: Column(
+          children: [
+            Container(
+              height: 16,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [kDarkBlue, kDodgerBlue],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+              ),
+            ),
+            Expanded(
+              child: (_tasks.isEmpty && _schedules.isEmpty)
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inbox_outlined,
+                              size: 72,
+                              color: kDodgerBlue.withOpacity(0.3)),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Belum ada item!',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: kDodgerBlue.withOpacity(0.5),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ketuk tombol + di bawah untuk menambahkan.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView(
+                      padding:
+                          const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        // ── Seksi TASK ────────────────────────────────
+                        if (_tasks.isNotEmpty) ...[
+                          SectionHeader(
+                            icon: Icons.task_alt_outlined,
+                            label: 'Task',
+                            color: kDodgerBlue,
+                            count: _tasks.length,
+                          ),
+                          const SizedBox(height: 8),
+                          ..._tasks.map((task) => TaskCard(
+                                task: task,
+                                onToggle: () => _toggleTask(task),
+                                onEdit: () =>
+                                    _openTaskSheet(existing: task),
+                                onDelete: () => _deleteTask(task),
+                              )),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // ── Seksi JADWAL ──────────────────────────────
+                        if (_schedules.isNotEmpty) ...[
+                          SectionHeader(
+                            icon: Icons.calendar_month_outlined,
+                            label: 'Jadwal',
+                            color: kDodgerBlue,
+                            count: _schedules.length,
+                          ),
+                          const SizedBox(height: 8),
+                          ..._schedules.map((s) => ScheduleCard(
+                                schedule: s,
+                                onEdit: () =>
+                                    _openScheduleSheet(existing: s),
+                                onDelete: () => _deleteSchedule(s),
+                              )),
+                        ],
+                      ],
+                    ),
+            ),
+          ],
+        ),
+
+        // ── FAB ─────────────────────────────────────────────────────────────
+        floatingActionButton: FloatingActionButton(
+          onPressed: _showAddOptions,
+          backgroundColor: kDodgerBlue,
+          elevation: 6,
+          child: const Icon(Icons.add_rounded,
+              color: Colors.white, size: 30),
+        ),
       ),
     );
   }
